@@ -5,12 +5,13 @@ import { telephonyVoiceManager, TelephonyCallState } from '../services/telephony
 import { webrtcManager } from '../services/webrtc.js';
 import { voiceService } from '../services/voice.js';
 import { ringtoneService } from '../services/ringtone.js';
+import { AgentWorkQueue } from './AgentWorkQueue.js';
 import { User, CallRecord, KnowledgeEntry, LanguageCode, SUPPORTED_LANGUAGES } from '../types.js';
 import {
   PhoneCall, PhoneOutgoing, PhoneOff, Mic, MicOff,
   Volume2, VolumeX, Clock, Search, BookOpen,
   Smartphone, AlertCircle, CheckCircle2, Radio, Info,
-  Globe, Sparkles, MessageSquare, Pause, Play, Send, Copy, Users
+  Globe, Sparkles, MessageSquare, Pause, Play, Send, Copy, Users, ListChecks
 } from 'lucide-react';
 
 interface LogEntry {
@@ -37,8 +38,8 @@ interface IncomingCall {
 export const AgentDashboard: React.FC = () => {
   const { user, token } = useAuth();
 
-  // Navigation tab: 'incoming' | 'outgoing' | 'console' | 'history' | 'knowledge'
-  const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing' | 'console' | 'history' | 'knowledge'>('outgoing');
+  // Navigation tab for agent workflows.
+  const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing' | 'console' | 'history' | 'knowledge' | 'queue'>('queue');
 
   // Agent Availability & Supported Languages
   const [agentStatus, setAgentStatus] = useState<'available' | 'busy'>(
@@ -747,6 +748,15 @@ export const AgentDashboard: React.FC = () => {
           {/* Navigation Tabs */}
           <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl border border-slate-200 text-xs font-semibold overflow-x-auto">
             <button
+              onClick={() => setActiveTab('queue')}
+              className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeTab === 'queue' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <ListChecks className="w-3.5 h-3.5 text-indigo-600" />
+              Work Queue
+            </button>
+            <button
               onClick={() => setActiveTab('outgoing')}
               className={`px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
                 activeTab === 'outgoing' ? 'bg-white text-slate-900 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900'
@@ -809,6 +819,8 @@ export const AgentDashboard: React.FC = () => {
           })}
         </div>
       </div>
+
+      {activeTab === 'queue' && <AgentWorkQueue />}
 
       {/* 1. OUTGOING CALLS TAB */}
       {activeTab === 'outgoing' && (

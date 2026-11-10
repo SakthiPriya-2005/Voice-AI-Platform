@@ -16,6 +16,12 @@ interface Ticket {
   updatedAt: string;
 }
 
+interface AgentOption {
+  id: string;
+  name: string;
+  email: string;
+}
+
 const statusLabels: Record<string, string> = {
   open: 'Open', in_progress: 'In Progress', waiting: 'Waiting for Response', resolved: 'Resolved', closed: 'Closed'
 };
@@ -24,6 +30,7 @@ const normalizePriority = (priority: string) => priority === 'normal' ? 'medium'
 export const SupportTickets: React.FC = () => {
   const { token } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -53,6 +60,21 @@ export const SupportTickets: React.FC = () => {
   }, [token]);
 
   useEffect(() => { void fetchTickets(); }, [fetchTickets]);
+
+  useEffect(() => {
+    if (!token) return;
+    const fetchAgents = async () => {
+      try {
+        const response = await fetch('/api/agents', { headers: { Authorization: `Bearer ${token}` } });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Unable to load support agents.');
+        setAgents(data.agents || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to load support agents.');
+      }
+    };
+    void fetchAgents();
+  }, [token]);
 
   const updateTicket = async (id: string, updates: Partial<Pick<Ticket, 'status' | 'priority' | 'assignedTo'>>) => {
     try {
@@ -120,7 +142,7 @@ export const SupportTickets: React.FC = () => {
         <input required value={subject} onChange={event => setSubject(event.target.value)} placeholder="Issue subject" className="rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2" />
         <textarea required value={description} onChange={event => setDescription(event.target.value)} placeholder="Describe the customer's issue" rows={3} className="rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2" />
         <label className="space-y-1 text-xs font-medium text-slate-600">Priority<select value={priority} onChange={event => setPriority(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
-        <label className="space-y-1 text-xs font-medium text-slate-600">Assign to<select value={assignedTo} onChange={event => setAssignedTo(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Unassigned</option><option value="Agent 1">Agent 1</option><option value="Agent 2">Agent 2</option></select></label>
+        <label className="space-y-1 text-xs font-medium text-slate-600">Assign to<select value={assignedTo} onChange={event => setAssignedTo(event.target.value)} className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Unassigned</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name} ({agent.email})</option>)}</select></label>
         <label className="space-y-1 text-xs font-medium text-slate-600">Follow-up date<input type="date" value={followUpAt} onChange={event => setFollowUpAt(event.target.value)} className="block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
         <div className="flex items-end justify-end gap-2"><button type="button" onClick={() => setShowForm(false)} className="rounded-lg px-3 py-2 text-sm text-slate-600">Cancel</button><button disabled={saving} className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Saving…' : 'Create issue'}</button></div>
       </form>}
@@ -134,7 +156,7 @@ export const SupportTickets: React.FC = () => {
               const overdue = ticket.followUpAt && new Date(ticket.followUpAt) < new Date() && !['resolved', 'closed'].includes(ticket.status);
               return <tr key={ticket.id} className="align-top hover:bg-slate-50/60"><td className="max-w-sm px-4 py-3"><p className="font-bold text-slate-900">{ticket.subject}</p><p className="mt-1 text-slate-700">{ticket.customerName}{ticket.customerEmail ? ` · ${ticket.customerEmail}` : ''}</p><p className="mt-1 line-clamp-2 text-slate-500">{ticket.description}</p></td>
                 <td className="px-4 py-3"><select aria-label={`Priority for ${ticket.subject}`} value={normalizePriority(ticket.priority)} onChange={event => void updateTicket(ticket.id, { priority: event.target.value })} className="rounded-md border border-slate-200 bg-white px-2 py-1"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></td>
-                <td className="px-4 py-3"><select aria-label={`Assignee for ${ticket.subject}`} value={ticket.assignedTo || ''} onChange={event => void updateTicket(ticket.id, { assignedTo: event.target.value })} className="rounded-md border border-slate-200 bg-white px-2 py-1"><option value="">Unassigned</option>{ticket.assignedTo && !['Agent 1', 'Agent 2'].includes(ticket.assignedTo) && <option value={ticket.assignedTo}>{ticket.assignedTo}</option>}<option value="Agent 1">Agent 1</option><option value="Agent 2">Agent 2</option></select></td>
+                <td className="px-4 py-3"><select aria-label={`Assignee for ${ticket.subject}`} value={ticket.assignedTo || ''} onChange={event => void updateTicket(ticket.id, { assignedTo: event.target.value })} className="rounded-md border border-slate-200 bg-white px-2 py-1"><option value="">Unassigned</option>{ticket.assignedTo && !agents.some(agent => agent.id === ticket.assignedTo) && <option value={ticket.assignedTo}>Unknown agent ({ticket.assignedTo})</option>}{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></td>
                 <td className={`px-4 py-3 ${overdue ? 'font-bold text-red-600' : ''}`}>{ticket.followUpAt ? new Date(ticket.followUpAt).toLocaleDateString() : '—'}{overdue ? ' · Overdue' : ''}</td>
                 <td className="px-4 py-3"><select aria-label={`Status for ${ticket.subject}`} value={ticket.status} onChange={event => void updateTicket(ticket.id, { status: event.target.value })} className="rounded-md border border-slate-200 bg-white px-2 py-1">{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></td>
                 <td className="whitespace-nowrap px-4 py-3">{new Date(ticket.updatedAt).toLocaleDateString()}</td></tr>;
